@@ -757,10 +757,14 @@ static struct msgb *handle_create_con(struct mgcp_parse_data *p)
 		return create_err_response(NULL, 501, "CRCX", p->trans);
 	}
 
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: endp is available\n");
+
 	/* parse CallID C: and LocalParameters L: */
 	for_each_line(line, p->save) {
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: parsing line: '%s'\n", line);
 		if (!mgcp_check_param(endp, line))
 			continue;
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: checked: '%s'\n", line);
 
 		switch (toupper(line[0])) {
 		case 'L':
@@ -805,7 +809,10 @@ static struct msgb *handle_create_con(struct mgcp_parse_data *p)
 		}
 	}
 
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp lines parsed fine\n");
+
 mgcp_header_done:
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_header_done\n");
 	/* Check parameters */
 	if (!callid) {
 		LOGPENDP(endp, DLMGCP, LOGL_ERROR,
@@ -813,6 +820,7 @@ mgcp_header_done:
 		rate_ctr_inc(&rate_ctrs->ctr[MGCP_CRCX_FAIL_MISSING_CALLID]);
 		return create_err_response(endp, 516, "CRCX", p->trans);
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: !!callid\n");
 
 	if (!mode) {
 		LOGPENDP(endp, DLMGCP, LOGL_ERROR,
@@ -820,6 +828,7 @@ mgcp_header_done:
 		rate_ctr_inc(&rate_ctrs->ctr[MGCP_CRCX_FAIL_INVALID_MODE]);
 		return create_err_response(endp, 517, "CRCX", p->trans);
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: !!mode\n");
 
 	/* Check if we are able to accept the creation of another connection */
 	if (llist_count(&endp->conns) >= endp->type->max_conns) {
@@ -838,6 +847,7 @@ mgcp_header_done:
 			return create_err_response(endp, 540, "CRCX", p->trans);
 		}
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after llist_count\n");
 
 	/* Check if this endpoint already serves a call, if so, check if the
 	 * callids match up so that we are sure that this is our call */
@@ -856,6 +866,7 @@ mgcp_header_done:
 			return create_err_response(endp, 400, "CRCX", p->trans);
 		}
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after verify_call_id\n");
 
 	if (!endp->callid) {
 		/* Claim endpoint resources. This will also set the callid,
@@ -867,8 +878,11 @@ mgcp_header_done:
 			return create_err_response(endp, 502, "CRCX", p->trans);
 		}
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after mgcp_endp_claim\n");
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: callid: '%s'\n", callid);
 
 	snprintf(conn_name, sizeof(conn_name), "%s", callid);
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after snprintf: '%s'\n", conn_name);
 	_conn = mgcp_conn_alloc(trunk->endpoints, endp, MGCP_CONN_TYPE_RTP, conn_name);
 	if (!_conn) {
 		LOGPENDP(endp, DLMGCP, LOGL_ERROR,
@@ -877,6 +891,7 @@ mgcp_header_done:
 		goto error2;
 
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after mgcp_conn_alloc\n");
 
 	conn = mgcp_conn_get_rtp(endp, _conn->id);
 	OSMO_ASSERT(conn);
@@ -886,6 +901,7 @@ mgcp_header_done:
 		rate_ctr_inc(&rate_ctrs->ctr[MGCP_CRCX_FAIL_INVALID_MODE]);
 		goto error2;
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after mgcp_parse_conn_mode\n");
 
 	/* Annotate Osmux circuit ID and set it to negotiating state until this
 	 * is fully set up from the dummy load. */
@@ -915,6 +931,7 @@ mgcp_header_done:
 			goto error2;
 		}
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after set_local_cx_options\n");
 
 	/* Handle codec information and decide for a suitable codec */
 	rc = handle_codec_info(conn, p, have_sdp, true);
@@ -934,6 +951,7 @@ mgcp_header_done:
 	}
 
 	mgcp_rtp_end_config(endp, 0, &conn->end);
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after handle_codec_info\n");
 
 	/* check connection mode setting */
 	if (conn->conn->mode != MGCP_CONN_LOOPBACK
@@ -953,6 +971,7 @@ mgcp_header_done:
 		rate_ctr_inc(&rate_ctrs->ctr[MGCP_CRCX_FAIL_BIND_PORT]);
 		goto error2;
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after mgcp_get_local_addr\n");
 
 	if (setup_rtp_processing(endp, conn) != 0) {
 		LOGPCONN(_conn, DLMGCP, LOGL_ERROR,
@@ -960,6 +979,7 @@ mgcp_header_done:
 		rate_ctr_inc(&rate_ctrs->ctr[MGCP_CRCX_FAIL_START_RTP]);
 		goto error2;
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: after setup_rtp_processing\n");
 
 	/* policy CB */
 	if (p->cfg->policy_cb) {

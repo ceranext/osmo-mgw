@@ -61,20 +61,28 @@ static int mgcp_alloc_id(struct mgcp_endpoint *endp, char *id)
 	 * prevent unintentional connections we assign the connection
 	 * identifiers randomly from a reasonable large number space */
 	for (i = 0; i < 32; i++) {
+		LOGP(DLMGCP, LOGL_ERROR, "pespin: mgcp_alloc_id: loop %d\n", i);
 		rc = osmo_get_rand_id(id_bin, sizeof(id_bin));
-		if (rc < 0)
+		if (rc < 0) {
+			LOGP(DLMGCP, LOGL_ERROR, "pespin: [%d] osmo_get_rand_id failed: %d\n", i, rc);
 			return rc;
+		}
+		LOGP(DLMGCP, LOGL_ERROR, "pespin: [%d] after osmo_get_rand_id\n", i);
 
 		id_hex = osmo_hexdump_nospc(id_bin, sizeof(id_bin));
+		LOGP(DLMGCP, LOGL_ERROR, "pespin: [%d] after osmo_hexdump_nospc\n", i);
 		for (k = 0; k < strlen(id_hex); k++)
 			id_hex[k] = toupper(id_hex[k]);
+		LOGP(DLMGCP, LOGL_ERROR, "pespin: [%d] after toupper: '%s'\n", i, id_hex);
 
 		/* ensure that the generated conn_id is unique
 		 * for this endpoint */
 		if (!mgcp_conn_get_rtp(endp, id_hex)) {
+			LOGP(DLMGCP, LOGL_ERROR, "pespin: [%d] mgcp_conn_get_rtp finish\n", i);
 			osmo_strlcpy(id, id_hex, MGCP_CONN_ID_MAXLEN);
 			return 0;
 		}
+		LOGP(DLMGCP, LOGL_ERROR, "pespin: [%d] after mgcp_conn_get_rtp\n", i);
 	}
 
 	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "unable to generate a unique connectionIdentifier\n");
@@ -85,6 +93,7 @@ static int mgcp_alloc_id(struct mgcp_endpoint *endp, char *id)
 /* Initialize rtp connection struct with default values */
 static int mgcp_rtp_conn_init(struct mgcp_conn_rtp *conn_rtp, struct mgcp_conn *conn)
 {
+	LOGP(DLMGCP, LOGL_ERROR, "pespin: mgcp_rtp_conn_init: init\n");
 	struct mgcp_rtp_end *end = &conn_rtp->end;
 	/* FIXME: Each new rate counter group requires an unique index. At the
 	 * moment we generate this index using this counter, but perhaps there
@@ -120,6 +129,7 @@ static int mgcp_rtp_conn_init(struct mgcp_conn_rtp *conn_rtp, struct mgcp_conn *
 
 	/* Make sure codec table is reset */
 	mgcp_codec_reset_all(conn_rtp);
+	LOGP(DLMGCP, LOGL_ERROR, "pespin: mgcp_rtp_conn_init: after mgcp_codec_reset_all\n");
 
 	return 0;
 }
@@ -163,33 +173,43 @@ struct mgcp_conn *mgcp_conn_alloc(void *ctx, struct mgcp_endpoint *endp,
 	struct mgcp_conn *conn;
 	int rc;
 
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: start\n");
 	/* Do not allow more then two connections */
 	if (llist_count(&endp->conns) >= endp->type->max_conns)
 		return NULL;
+
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: after llist_count\n");
 
 	/* Create new connection and add it to the list */
 	conn = talloc_zero(ctx, struct mgcp_conn);
 	if (!conn)
 		return NULL;
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: after talloc_zero\n");
 	conn->endp = endp;
 	conn->type = type;
 	conn->mode = MGCP_CONN_NONE;
 	conn->mode_orig = MGCP_CONN_NONE;
 	osmo_strlcpy(conn->name, name, sizeof(conn->name));
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: after osmo_strlcpy: '%s'\n", conn->name);
 	rc = mgcp_alloc_id(endp, conn->id);
 	if (rc < 0) {
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc:mgcp_alloc_id failed: %d\n", rc);
 		talloc_free(conn);
 		return NULL;
 	}
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: after mgcp_alloc_id\n");
 
 	switch (type) {
 	case MGCP_CONN_TYPE_RTP:
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: type MGCP_CONN_TYPE_RTP\n");
 		if (mgcp_rtp_conn_init(&conn->u.rtp, conn) < 0) {
 			talloc_free(conn);
 			return NULL;
 		}
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: after MGCP_CONN_TYPE_RTP\n");
 		break;
 	default:
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: default type\n");
 		/* NOTE: This should never be called with an
 		 * invalid type, its up to the programmer
 		 * to ensure propery types */
@@ -199,7 +219,9 @@ struct mgcp_conn *mgcp_conn_alloc(void *ctx, struct mgcp_endpoint *endp,
 	/* Initialize watchdog */
 	osmo_timer_setup(&conn->watchdog, mgcp_conn_watchdog_cb, conn);
 	mgcp_conn_watchdog_kick(conn);
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: after mgcp_conn_watchdog_kick\n");
 	mgcp_endp_add_conn(endp, conn);
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_alloc: after mgcp_endp_add_conn\n");
 
 	return conn;
 }
@@ -214,25 +236,42 @@ struct mgcp_conn *mgcp_conn_get(struct mgcp_endpoint *endp, const char *id)
 	const char *id_upper;
 	const char *conn_id;
 
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: start '%s'\n", id);
+
+
 	if (!id || !*id)
 		return NULL;
+
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: after first check\n");
 
 	/* Ignore leading zeros in needle */
 	while (*id == '0')
 		id++;
 
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: after loop: %s\n", id);
+
 	/* Use uppercase to compare identifiers, to avoid mismatches: RFC3435 2.1.3.2 "Names of
 	 * Connections" defines the id as a hex string, so clients may return lower case hex even though
 	 * we sent upper case hex in the CRCX response. */
 	id_upper = osmo_str_toupper(id);
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: after osmo_str_toupper: %s\n", id_upper);
+
 
 	llist_for_each_entry(conn, &endp->conns, entry) {
 		/* Ignore leading zeros in haystack */
-		for (conn_id=conn->id; *conn_id == '0'; conn_id++);
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: checking against: '%s'\n", conn->id);
 
-		if (strcmp(conn_id, id_upper) == 0)
+		for (conn_id=conn->id; *conn_id == '0'; conn_id++);
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: checking forward against: '%s'\n", conn_id);
+
+		if (strcmp(conn_id, id_upper) == 0) {
+			LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: strcmp matches\n");
 			return conn;
+		}
+		LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: after strcmp\n");
 	}
+
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: return NULL\n");
 
 	return NULL;
 }
@@ -246,13 +285,20 @@ struct mgcp_conn_rtp *mgcp_conn_get_rtp(struct mgcp_endpoint *endp,
 {
 	struct mgcp_conn *conn;
 
+	LOGP(DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get_rtp: start '%s'\n", id);
+
 	conn = mgcp_conn_get(endp, id);
 	if (!conn)
 		return NULL;
 
-	if (conn->type == MGCP_CONN_TYPE_RTP)
-		return &conn->u.rtp;
+	LOGP(DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get_rtp: after mgcp_conn_get %p\n", conn);
 
+	if (conn->type == MGCP_CONN_TYPE_RTP) {
+		LOGP(DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get_rtp: type is MGCP_CONN_TYPE_RTP\n");
+		return &conn->u.rtp;
+	}
+
+		LOGP(DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get_rtp: return NULL\n");
 	return NULL;
 }
 
