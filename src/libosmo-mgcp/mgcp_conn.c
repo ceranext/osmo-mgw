@@ -233,8 +233,9 @@ struct mgcp_conn *mgcp_conn_alloc(void *ctx, struct mgcp_endpoint *endp,
 struct mgcp_conn *mgcp_conn_get(struct mgcp_endpoint *endp, const char *id)
 {
 	struct mgcp_conn *conn;
-	const char *id_upper;
 	const char *conn_id;
+	int rc;
+	char id_upper[128];
 
 	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: start '%s'\n", id);
 
@@ -253,8 +254,8 @@ struct mgcp_conn *mgcp_conn_get(struct mgcp_endpoint *endp, const char *id)
 	/* Use uppercase to compare identifiers, to avoid mismatches: RFC3435 2.1.3.2 "Names of
 	 * Connections" defines the id as a hex string, so clients may return lower case hex even though
 	 * we sent upper case hex in the CRCX response. */
-	id_upper = osmo_str_toupper(id);
-	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: after osmo_str_toupper: %s\n", id_upper);
+	rc = osmo_str_toupper_buf(id_upper, sizeof(id_upper), id);
+	LOGPENDP(endp, DLMGCP, LOGL_ERROR, "pespin: mgcp_conn_get: after osmo_str_toupper rc=%d: '%s'\n", rc, id_upper);
 
 
 	llist_for_each_entry(conn, &endp->conns, entry) {
