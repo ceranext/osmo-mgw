@@ -433,8 +433,21 @@ int mgcp_codec_pt_translate(struct mgcp_conn_rtp *conn_src, struct mgcp_conn_rtp
 			break;
 		}
 	}
-	if (!codec_src)
-		return -EINVAL;
+	if (!codec_src) {
+        // If we found no match but there is only one codec assigned on the source side,
+        // assume that it is the one. We have nothing to lose, because in the worst case we will
+        // fail in the next code block, which performs a stricter comparison with the destination codec.
+        // This code flow is needed (hopefully temporarily) in order to support the IuUP patch 
+        // because there are some issues negotiating the correct payload type. 
+        //
+        // * In theory, this could slow down the code in a scenario where we continuously receive payloads 
+        //   with unknown payload type and the source codec doesn't match any destination one.
+        if (codecs_assigned == 1 && rtp_src != rtp_dst) {
+            codec_src = &rtp_src->codecs[0];
+        } else {
+            return -EINVAL;
+        }
+    }
 
 	/* Use the codec infrmation from the source and try to find the
 	 * equivalent of it on the destination side */
